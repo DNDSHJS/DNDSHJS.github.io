@@ -5,8 +5,8 @@
 </head>
 <body>
     <h2>D&D 伤害期望计算器</h2>
-    <p>输入骰子公式如："3d10+19d10+36d8":</p>
-    <input type="text" id="diceExpression" placeholder="3d10+19d10+36d8">
+    <p>输入骰子公式如：4d10+2d6。若要加入易伤与抗性则在后面加入v,r。如4d10v+2d6r（'v'表示易伤，'r'表示抗性）:</p>
+    <input type="text" id="diceExpression" placeholder="4d10v+2d6r">
     <button onclick="calculateDamage()">Calculate</button>
     <p id="result"></p>
 
@@ -16,10 +16,18 @@
             var parts = expression.split('+');
             var totalExpectation = 0;
             for (var i = 0; i < parts.length; i++) {
-                var part = parts[i].split('d');
-                var numDice = parseInt(part[0], 10);
-                var diceSides = parseInt(part[1], 10);
-                var expectation = numDice * (diceSides + 1) / 2;
+                var part = parts[i];
+                var modifier = 1; // 默认没有易伤或抗性
+                if (part.endsWith('v')) {
+                    modifier = 2; // 易伤，伤害加倍
+                    part = part.slice(0, -1); // 移除最后一个字符
+                } else if (part.endsWith('r')) {
+                    modifier = 0.5; // 抗性，伤害减半
+                    part = part.slice(0, -1); // 移除最后一个字符
+                }
+                
+                var [numDice, diceSides] = part.split('d').map(Number);
+                var expectation = numDice * (diceSides + 1) / 2 * modifier;
                 totalExpectation += expectation;
             }
             document.getElementById('result').innerHTML = "Expected Damage: " + totalExpectation;
@@ -27,6 +35,7 @@
     </script>
 </body>
 </html>
+
 
 
 #自动侏儒会跑ai团吗？出品。有任何问题并不负责（确信）
