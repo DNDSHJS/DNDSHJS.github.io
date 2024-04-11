@@ -2,6 +2,15 @@
 <html>
 <head>
     <title>D&D 伤害计算器</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #damageDistributionChart {
+            max-width: 1000px;
+            max-height: 400px;
+            margin: auto;
+            display: block;
+        }
+    </style>
 </head>
 <body>
     <h2>D&D 伤害期望计算器</h2>
@@ -9,6 +18,7 @@
     <input type="text" id="diceExpression" placeholder="4d10v+2d6r">
     <button onclick="calculateDamage()">Calculate</button>
     <p id="result"></p>
+    <canvas id="damageDistributionChart"></canvas>
 
     <script>
         function calculateDamage() {
@@ -17,24 +27,103 @@
             var totalExpectation = 0;
             for (var i = 0; i < parts.length; i++) {
                 var part = parts[i];
-                var modifier = 1; // 默认没有易伤或抗性
+                var modifier = 1;
                 if (part.endsWith('v')) {
-                    modifier = 2; // 易伤，伤害加倍
-                    part = part.slice(0, -1); // 移除最后一个字符
+                    modifier = 2;
+                    part = part.slice(0, -1);
                 } else if (part.endsWith('r')) {
-                    modifier = 0.5; // 抗性，伤害减半
-                    part = part.slice(0, -1); // 移除最后一个字符
+                    modifier = 0.5;
+                    part = part.slice(0, -1);
                 }
-                
+
                 var [numDice, diceSides] = part.split('d').map(Number);
                 var expectation = numDice * (diceSides + 1) / 2 * modifier;
                 totalExpectation += expectation;
             }
-            document.getElementById('result').innerHTML = "Expected Damage: " + totalExpectation;
+            document.getElementById('result').innerHTML = "Expected Damage: " + totalExpectation.toFixed(2);
+            simulateDiceRolls(); // 在计算期望值时同时进行模拟
+        }
+
+        function simulateDiceRolls() {
+            var expression = document.getElementById('diceExpression').value;
+            var parts = expression.split('+');
+            var maxDamage = 0;
+
+            parts.forEach(part => {
+                var modifier = 1;
+                if (part.endsWith('v')) {
+                    modifier = 2;
+                    part = part.slice(0, -1);
+                } else if (part.endsWith('r')) {
+                    modifier = 0.5;
+                    part = part.slice(0, -1);
+                }
+
+                var [numDice, diceSides] = part.split('d').map(Number);
+                maxDamage += numDice * diceSides * modifier;
+            });
+
+            var results = new Array(maxDamage + 1).fill(0);
+            var simulationCount = 1000000;
+
+            for (var i = 0; i < simulationCount; i++) {
+                var totalDamage = 0;
+                for (var part of parts) {
+                    var modifier = 1;
+                    if (part.endsWith('v')) {
+                        modifier = 2;
+                        part = part.slice(0, -1);
+                    } else if (part.endsWith('r')) {
+                        modifier = 0.5;
+                        part = part.slice(0, -1);
+                    }
+
+                    var [numDice, diceSides] = part.split('d').map(Number);
+                    for (var j = 0; j < numDice; j++) {
+                        totalDamage += Math.floor(Math.random() * diceSides) + 1;
+                    }
+                    totalDamage *= modifier;
+                }
+                results[Math.min(Math.floor(totalDamage), maxDamage)]++;
+            }
+
+            var percentages = results.map(count => (count / simulationCount) * 100);
+
+            var ctx = document.getElementById('damageDistributionChart').getContext('2d');
+            if (window.barChart != undefined) {
+                window.barChart.destroy();
+            }
+            window.barChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Array.from({length: maxDamage + 1}, (_, i) => i + 1),
+                    datasets: [{
+                        label: 'Damage Probability (%)',
+                        data: percentages,
+                        backgroundColor: 'rgba(54, 162, 235, 0.2)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + "%";
+                                }
+                            }
+                        }
+                    },
+                    maintainAspectRatio: false
+                }
+            });
         }
     </script>
 </body>
 </html>
+
 
 
 
