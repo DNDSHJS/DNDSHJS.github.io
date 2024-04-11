@@ -73,12 +73,12 @@
 
             if (!hasAdvantage && !hasDisadvantage) {
                 // 无优势/劣势时显示计算期望
-                document.getElementById('result').innerHTML = "Expected Damage: " + totalExpectation.toFixed(2);
+                document.getElementById('result').innerHTML = "期望伤害: " + totalExpectation.toFixed(2);
             } else {
                 // 显示模拟中最可能的伤害值
                 var maxCount = Math.max(...results);
                 var mostLikelyDamage = results.indexOf(maxCount);
-                document.getElementById('result').innerHTML = "Most likely simulated damage: " + mostLikelyDamage;
+                document.getElementById('result').innerHTML = "模拟伤害: " + mostLikelyDamage;
             }
 
             var percentages = results.map(count => (count / simulationCount) * 100);
