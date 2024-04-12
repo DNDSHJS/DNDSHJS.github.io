@@ -27,14 +27,14 @@
             <input type="checkbox" id="powerAttack" name="powerAttack"> 减五加十
             <div>
                 <input type="radio" id="hitNone" name="hitAdvantageDisadvantage" value="none" checked> 无
-                <input type="radio" id="hitAdvantage" name="hitAdvantageDisadvantage" value="advantage"> 优势
-                <input type="radio" id="hitDisadvantage" name="hitAdvantageDisadvantage" value="disadvantage"> 劣势
+                <input type="radio" id="hitAdvantage" name="hitAdvantageDisadvantage" value="advantage"> 重骰取高
+                <input type="radio" id="hitDisadvantage" name="hitAdvantageDisadvantage" value="disadvantage"> 重骰取低
                 <input type="radio" id="elvenAccuracy" name="hitAdvantageDisadvantage" value="elvenAccuracy"> 精灵之准
             </div>
         </div>
     </div>
 
-    <p>输入伤害公式，如：2d10+5。若要加入易伤与抗性则在后面加入v或r。如2d10r+5v，加值若有抗性或易伤则也要在后面加入r或v（'v'表示易伤，'r'表示抗性）:</p>
+    <p>输入骰子公式，如：2d10+5。若要加入易伤与抗性则在后面加入v或r。如2d10r+5v，加值若有抗性或易伤则也要在后面加入r或v（'v'表示易伤，'r'表示抗性）:</p>
     <input type="text" id="diceExpression" placeholder="2d10+5">
     <div>
         <input type="radio" id="none" name="advantageDisadvantage" value="none" checked> 无
@@ -61,12 +61,11 @@
             var hasAdvantage = document.getElementById('advantage').checked;
             var hasDisadvantage = document.getElementById('disadvantage').checked;
             var includeHitCalc = document.getElementById('includeHitCalc').checked;
-            var totalExpectation = calculateDamage(hasAdvantage, hasDisadvantage);
-            var hitProbability = 0;
+            var simulatedDamage = calculateDamage(hasAdvantage, hasDisadvantage);
+            var hitProbability = includeHitCalc ? calculateHitProbability() : 0;
 
             if (includeHitCalc) {
-                hitProbability = calculateHitProbability();
-                document.getElementById('expectedDamage').innerHTML = "预期伤害（命中率*期望伤害）: " + (totalExpectation * hitProbability).toFixed(2);
+                document.getElementById('expectedDamage').innerHTML = "预期伤害（命中率*模拟伤害）: " + (simulatedDamage * hitProbability).toFixed(2);
             } else {
                 document.getElementById('expectedDamage').innerHTML = "";
             }
@@ -92,7 +91,7 @@
             });
 
             if (powerAttack) {
-                attackBonus -= 5; // 减五加十选项中的减五
+                attackBonus -= 5;
             }
 
             var hitProbability = calculateProbability(targetAC - attackBonus, hasAdvantage, hasDisadvantage, hasElvenAccuracy);
@@ -153,24 +152,23 @@
             });
 
             if (powerAttack) {
-                totalExpectation += 10; // 减五加十选项中的加十
+                totalExpectation += 10;
             }
 
             var results = new Array(maxDamage + 10).fill(0);
             var simulationCount = 1000000;
+            var mostLikelyDamage = 0;
 
             for (var i = 0; i < simulationCount; i++) {
                 var totalDamage = simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack);
                 results[Math.min(Math.floor(totalDamage), maxDamage)]++;
+                mostLikelyDamage = totalDamage > mostLikelyDamage ? totalDamage : mostLikelyDamage;
             }
 
-            if (!hasAdvantage && !hasDisadvantage) {
-                document.getElementById('result').innerHTML = "期望伤害: " + totalExpectation.toFixed(2);
-            } else {
-                var maxCount = Math.max(...results);
-                var mostLikelyDamage = results.indexOf(maxCount);
-                document.getElementById('result').innerHTML = "模拟伤害: " + mostLikelyDamage;
-            }
+            var maxCount = Math.max(...results);
+            mostLikelyDamage = results.indexOf(maxCount);
+
+            document.getElementById('result').innerHTML = "模拟期望伤害: " + mostLikelyDamage;
 
             var percentages = results.map(count => (count / simulationCount) * 100);
 
@@ -205,7 +203,7 @@
                 }
             });
 
-            return totalExpectation;
+            return mostLikelyDamage; // 返回最可能的伤害而非期望伤害，以用于计算预期伤害
         }
 
         function simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack) {
@@ -222,18 +220,20 @@
 
                 if (part.includes('d')) {
                     var [numDice, diceSides] = part.split('d').map(Number);
+                    var rolls = [];
                     for (var j = 0; j < numDice; j++) {
-                        var roll1 = Math.floor(Math.random() * diceSides) + 1;
-                        var roll2 = Math.floor(Math.random() * diceSides) + 1;
-                        var effectiveRoll = roll1;
-
-                        if (hasAdvantage) {
-                            effectiveRoll = Math.max(roll1, roll2);
-                        } else if (hasDisadvantage) {
-                            effectiveRoll = Math.min(roll1, roll2);
+                        rolls.push(Math.floor(Math.random() * diceSides) + 1);
+                        if (hasAdvantage || hasDisadvantage) {
+                            rolls.push(Math.floor(Math.random() * diceSides) + 1);
                         }
-
+                        var effectiveRoll = rolls[0];
+                        if (hasAdvantage) {
+                            effectiveRoll = Math.max(...rolls);
+                        } else if (hasDisadvantage) {
+                            effectiveRoll = Math.min(...rolls);
+                        }
                         totalDamage += effectiveRoll;
+                        rolls = []; // Reset rolls for next dice
                     }
                 } else {
                     totalDamage += Number(part);
@@ -242,19 +242,14 @@
             });
 
             if (powerAttack) {
-                totalDamage += 10; // 减五加十选项中的加十
+                totalDamage += 10; // Apply the "+10" from "Power Attack"
             }
 
-            return totalDamage;//芝士彩蛋
+            return totalDamage;
         }
     </script>
 </body>
 </html>
-
-
-
-
-
 
 
 #自动侏儒会跑ai团吗？出品。有任何问题概不负责（确信）
