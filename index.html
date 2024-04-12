@@ -5,42 +5,132 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         #damageDistributionChart {
-            max-width: 400px;
+            max-width: 600px;
             max-height: 400px;
             margin: auto;
             display: block;
         }
+        .hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
-    <h2>D&D 伤害期望计算器</h2>
-    <p>输入骰子公式如：2d10+5。若要加入易伤与抗性则在后面加入v,r。如2d10r+5v，加值若有抗性或易伤则也要在后面加入r或v（'v'表示易伤，'r'表示抗性）:</p>
+    <h2>D&D 伤害与命中率计算器</h2>
+    
+    <div>
+        <p>命中率计算（可选）:</p>
+        <input type="checkbox" id="includeHitCalc" name="includeHitCalc" onclick="toggleHitCalc()"> 包含命中率计算
+        <div id="hitOptions" class="hidden">
+            <input type="text" id="targetAC" placeholder="目标AC">
+            <input type="text" id="attackBonus" placeholder="攻击加值（如 4+d4）">
+            <input type="checkbox" id="powerAttack" name="powerAttack"> 减五加十
+            <div>
+                <input type="radio" id="hitNone" name="hitAdvantageDisadvantage" value="none" checked> 无
+                <input type="radio" id="hitAdvantage" name="hitAdvantageDisadvantage" value="advantage"> 优势
+                <input type="radio" id="hitDisadvantage" name="hitAdvantageDisadvantage" value="disadvantage"> 劣势
+                <input type="radio" id="elvenAccuracy" name="hitAdvantageDisadvantage" value="elvenAccuracy"> 精灵之准
+            </div>
+        </div>
+    </div>
+
+    <p>输入骰子公式，如：2d10+5。若要加入易伤与抗性则在后面加入v或r。如2d10r+5v，加值若有抗性或易伤则也要在后面加入r或v（'v'表示易伤，'r'表示抗性）:</p>
     <input type="text" id="diceExpression" placeholder="2d10+5">
     <div>
         <input type="radio" id="none" name="advantageDisadvantage" value="none" checked> 无
         <input type="radio" id="advantage" name="advantageDisadvantage" value="advantage"> 重骰取高
         <input type="radio" id="disadvantage" name="advantageDisadvantage" value="disadvantage"> 重骰取低
     </div>
-    <button onclick="calculateDamage()">Calculate</button>
+    <button onclick="calculateAll()">计算</button>
     <p id="result"></p>
+    <p id="hitProbability"></p>
+    <p id="expectedDamage"></p>
     <canvas id="damageDistributionChart"></canvas>
 
     <script>
-        function calculateDamage() {
-            var hasAdvantage = document.getElementById('advantage').checked;
-            var hasDisadvantage = document.getElementById('disadvantage').checked;
-            simulateDiceRolls(hasAdvantage, hasDisadvantage); // 总是进行模拟以更新图表
+        function toggleHitCalc() {
+            var hitOptions = document.getElementById('hitOptions');
+            if (document.getElementById('includeHitCalc').checked) {
+                hitOptions.classList.remove('hidden');
+            } else {
+                hitOptions.classList.add('hidden');
+            }
         }
 
-        function simulateDiceRolls(hasAdvantage, hasDisadvantage) {
+        function calculateAll() {
+            var hasAdvantage = document.getElementById('advantage').checked;
+            var hasDisadvantage = document.getElementById('disadvantage').checked;
+            var includeHitCalc = document.getElementById('includeHitCalc').checked;
+            var totalExpectation = calculateDamage(hasAdvantage, hasDisadvantage);
+            var hitProbability = 0;
+
+            if (includeHitCalc) {
+                hitProbability = calculateHitProbability();
+                document.getElementById('expectedDamage').innerHTML = "预期伤害（命中率*期望伤害）: " + (totalExpectation * hitProbability).toFixed(2);
+            } else {
+                document.getElementById('expectedDamage').innerHTML = "";
+            }
+        }
+
+        function calculateHitProbability() {
+            var hasAdvantage = document.getElementById('hitAdvantage').checked;
+            var hasDisadvantage = document.getElementById('hitDisadvantage').checked;
+            var hasElvenAccuracy = document.getElementById('elvenAccuracy').checked;
+            var targetAC = parseInt(document.getElementById('targetAC').value);
+            var attackBonusInput = document.getElementById('attackBonus').value;
+            var attackBonusParts = attackBonusInput.split('+').map(part => part.trim());
+            var attackBonus = 0;
+            var powerAttack = document.getElementById('powerAttack').checked;
+
+            attackBonusParts.forEach(part => {
+                if (part.includes('d')) {
+                    var [numDice, diceSides] = part.split('d').map(Number);
+                    attackBonus += numDice * (diceSides + 1) / 2;
+                } else {
+                    attackBonus += parseInt(part);
+                }
+            });
+
+            if (powerAttack) {
+                attackBonus -= 5; // 减五加十选项中的减五
+            }
+
+            var hitProbability = calculateProbability(targetAC - attackBonus, hasAdvantage, hasDisadvantage, hasElvenAccuracy);
+            document.getElementById('hitProbability').innerHTML = "命中率: " + (hitProbability * 100).toFixed(2) + "%";
+            return hitProbability;
+        }
+
+        function calculateProbability(threshold, hasAdvantage, hasDisadvantage, hasElvenAccuracy) {
+            if (hasAdvantage) {
+                if (threshold <= 1) return 1;
+                if (threshold >= 21) return 0;
+                return 1 - (threshold - 1) * (threshold - 1) / 400;
+            } else if (hasDisadvantage) {
+                if (threshold <= 1) return 1;
+                if (threshold >= 21) return 0;
+                return (21 - threshold) * (21 - threshold) / 400;
+            } else if (hasElvenAccuracy) {
+                if (threshold <= 1) return 1;
+                if (threshold >= 21) return 0;
+                var p = 1 - ((threshold - 1) / 20);
+                return 1 - Math.pow(1 - p, 3);
+            } else {
+                if (threshold <= 1) return 1;
+                if (threshold >= 21) return 0;
+                return (21 - threshold) / 20;
+            }
+        }
+
+        function calculateDamage(hasAdvantage, hasDisadvantage) {
             var expression = document.getElementById('diceExpression').value;
             var parts = expression.split('+');
             var maxDamage = 0;
-            var totalExpectation = 0; // 用于非优势/劣势情况下的期望计算
+            var totalExpectation = 0;
+            var powerAttack = document.getElementById('powerAttack').checked;
 
             parts.forEach(part => {
                 var modifier = 1;
-                var baseValue = 0; // 直接加值或骰子基础值
+                var baseValue = 0;
 
                 if (part.endsWith('v')) {
                     modifier = 2;
@@ -62,20 +152,21 @@
                 totalExpectation += baseValue * modifier;
             });
 
-            var results = new Array(maxDamage + 1).fill(0);
+            if (powerAttack) {
+                totalExpectation += 10; // 减五加十选项中的加十
+            }
+
+            var results = new Array(maxDamage + 10).fill(0);
             var simulationCount = 1000000;
 
-            // 进行模拟
             for (var i = 0; i < simulationCount; i++) {
-                var totalDamage = simulateDamage(parts, hasAdvantage, hasDisadvantage);
+                var totalDamage = simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack);
                 results[Math.min(Math.floor(totalDamage), maxDamage)]++;
             }
 
             if (!hasAdvantage && !hasDisadvantage) {
-                // 无优势/劣势时显示计算期望
                 document.getElementById('result').innerHTML = "期望伤害: " + totalExpectation.toFixed(2);
             } else {
-                // 显示模拟中最可能的伤害值
                 var maxCount = Math.max(...results);
                 var mostLikelyDamage = results.indexOf(maxCount);
                 document.getElementById('result').innerHTML = "模拟伤害: " + mostLikelyDamage;
@@ -90,9 +181,9 @@
             window.barChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Array.from({length: maxDamage + 1}, (_, i) => i + 1),
+                    labels: Array.from({length: maxDamage + 10}, (_, i) => i + 1),
                     datasets: [{
-                        label: 'Damage Probability (%)',
+                        label: '伤害概率 (%)',
                         data: percentages,
                         backgroundColor: 'rgba(54, 162, 235, 0.2)',
                         borderColor: 'rgba(54, 162, 235, 1)',
@@ -113,9 +204,11 @@
                     maintainAspectRatio: false
                 }
             });
+
+            return totalExpectation;
         }
 
-        function simulateDamage(parts, hasAdvantage, hasDisadvantage) {
+        function simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack) {
             var totalDamage = 0;
             parts.forEach(part => {
                 var modifier = 1;
@@ -147,11 +240,18 @@
                 }
                 totalDamage *= modifier;
             });
-            return totalDamage;
-        }//芝士彩蛋。奖励你一个银光锐语。
+
+            if (powerAttack) {
+                totalDamage += 10; // 减五加十选项中的加十
+            }
+
+            return totalDamage;//芝士彩蛋
+        }
     </script>
 </body>
 </html>
+
+
 
 
 
