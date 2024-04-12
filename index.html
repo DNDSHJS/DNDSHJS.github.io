@@ -168,7 +168,7 @@
             var maxCount = Math.max(...results);
             mostLikelyDamage = results.indexOf(maxCount);
 
-            document.getElementById('result').innerHTML = "模拟期望伤害: " + mostLikelyDamage;
+            document.getElementById('result').innerHTML = "期望伤害: " + mostLikelyDamage;
 
             var percentages = results.map(count => (count / simulationCount) * 100);
 
