@@ -27,8 +27,8 @@
             <input type="checkbox" id="powerAttack" name="powerAttack"> 减五加十
             <div>
                 <input type="radio" id="hitNone" name="hitAdvantageDisadvantage" value="none" checked> 无
-                <input type="radio" id="hitAdvantage" name="hitAdvantageDisadvantage" value="advantage"> 优势
-                <input type="radio" id="hitDisadvantage" name="hitAdvantageDisadvantage" value="disadvantage"> 劣势
+                <input type="radio" id="hitAdvantage" name="hitAdvantageDisadvantage" value="advantage"> 重骰取高
+                <input type="radio" id="hitDisadvantage" name="hitAdvantageDisadvantage" value="disadvantage"> 重骰取低
                 <input type="radio" id="elvenAccuracy" name="hitAdvantageDisadvantage" value="elvenAccuracy"> 精灵之准
             </div>
         </div>
@@ -125,7 +125,6 @@
             var parts = expression.split('+');
             var maxDamage = 0;
             var totalExpectation = 0;
-            var powerAttack = document.getElementById('powerAttack').checked;
 
             parts.forEach(part => {
                 var modifier = 1;
@@ -142,7 +141,7 @@
                 if (part.includes('d')) {
                     var [numDice, diceSides] = part.split('d').map(Number);
                     baseValue = numDice * (diceSides + 1) / 2;
-                    maxDamage += (numDice * diceSides) * modifier;
+                    maxDamage += numDice * diceSides * modifier;
                 } else {
                     baseValue = Number(part);
                     maxDamage += baseValue * modifier;
@@ -151,26 +150,43 @@
                 totalExpectation += baseValue * modifier;
             });
 
-            if (powerAttack) {
-                totalExpectation += 10;
+            if (!hasAdvantage && !hasDisadvantage) {
+                document.getElementById('result').innerHTML = "期望伤害: " + totalExpectation.toFixed(2);
+                drawChart(totalExpectation, maxDamage, 1000000); // Assume a normal distribution for simplicity
+                return totalExpectation;
+            } else {
+                var simulationCount = 1000000;
+                var results = new Array(maxDamage + 10).fill(0);
+                var mostLikelyDamage = 0;
+
+                for (var i = 0; i < simulationCount; i++) {
+                    var totalDamage = simulateDamage(parts, hasAdvantage, hasDisadvantage);
+                    results[Math.min(Math.floor(totalDamage), maxDamage)]++;
+                    mostLikelyDamage = totalDamage > mostLikelyDamage ? totalDamage : mostLikelyDamage;
+                }
+
+                var maxCount = Math.max(...results);
+                mostLikelyDamage = results.indexOf(maxCount);
+
+                document.getElementById('result').innerHTML = "模拟期望伤害: " + mostLikelyDamage;
+
+                var percentages = results.map(count => (count / simulationCount) * 100);
+
+                drawChart(percentages, maxDamage);
+                return mostLikelyDamage;
             }
+        }
 
-            var results = new Array(maxDamage + 10).fill(0);
-            var simulationCount = 1000000;
-            var mostLikelyDamage = 0;
-
-            for (var i = 0; i < simulationCount; i++) {
-                var totalDamage = simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack);
-                results[Math.min(Math.floor(totalDamage), maxDamage)]++;
-                mostLikelyDamage = totalDamage > mostLikelyDamage ? totalDamage : mostLikelyDamage;
+        function drawChart(data, maxDamage, count = 1) {
+            var percentages;
+            if (typeof data === 'number') { // If it's a single number, assume a normal distribution around it
+                percentages = new Array(maxDamage + 1).fill(0).map((_, i) => {
+                    var deviation = Math.abs(data - i);
+                    return Math.exp(-0.5 * (deviation * deviation) / (data / 3)) / (Math.sqrt(2 * Math.PI) * (data / 3));
+                });
+            } else {
+                percentages = data;
             }
-
-            var maxCount = Math.max(...results);
-            mostLikelyDamage = results.indexOf(maxCount);
-
-            document.getElementById('result').innerHTML = "期望伤害: " + mostLikelyDamage;
-
-            var percentages = results.map(count => (count / simulationCount) * 100);
 
             var ctx = document.getElementById('damageDistributionChart').getContext('2d');
             if (window.barChart != undefined) {
@@ -179,7 +195,7 @@
             window.barChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: Array.from({length: maxDamage + 10}, (_, i) => i + 1),
+                    labels: Array.from({length: maxDamage + 1}, (_, i) => i + 1),
                     datasets: [{
                         label: '伤害概率 (%)',
                         data: percentages,
@@ -194,7 +210,7 @@
                             beginAtZero: true,
                             ticks: {
                                 callback: function(value) {
-                                    return value.toFixed(2) + "%";
+                                    return (value * 100 / count).toFixed(2) + "%";
                                 }
                             }
                         }
@@ -202,11 +218,9 @@
                     maintainAspectRatio: false
                 }
             });
-
-            return mostLikelyDamage; // 返回最可能的伤害而非期望伤害，以用于计算预期伤害
         }
 
-        function simulateDamage(parts, hasAdvantage, hasDisadvantage, powerAttack) {
+        function simulateDamage(parts, hasAdvantage, hasDisadvantage) {
             var totalDamage = 0;
             parts.forEach(part => {
                 var modifier = 1;
@@ -220,20 +234,16 @@
 
                 if (part.includes('d')) {
                     var [numDice, diceSides] = part.split('d').map(Number);
-                    var rolls = [];
                     for (var j = 0; j < numDice; j++) {
-                        rolls.push(Math.floor(Math.random() * diceSides) + 1);
-                        if (hasAdvantage || hasDisadvantage) {
-                            rolls.push(Math.floor(Math.random() * diceSides) + 1);
-                        }
-                        var effectiveRoll = rolls[0];
+                        var roll = rollDice(diceSides);
                         if (hasAdvantage) {
-                            effectiveRoll = Math.max(...rolls);
+                            var roll2 = rollDice(diceSides);
+                            roll = Math.max(roll, roll2);
                         } else if (hasDisadvantage) {
-                            effectiveRoll = Math.min(...rolls);
+                            var roll2 = rollDice(diceSides);
+                            roll = Math.min(roll, roll2);
                         }
-                        totalDamage += effectiveRoll;
-                        rolls = []; // Reset rolls for next dice
+                        totalDamage += roll;
                     }
                 } else {
                     totalDamage += Number(part);
@@ -241,11 +251,11 @@
                 totalDamage *= modifier;
             });
 
-            if (powerAttack) {
-                totalDamage += 10; // Apply the "+10" from "Power Attack"
-            }
-
             return totalDamage;
+        }
+
+        function rollDice(diceSides) {
+            return Math.floor(Math.random() * diceSides) + 1;
         }
     </script>
 </body>
