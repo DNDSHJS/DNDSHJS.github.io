@@ -81,6 +81,7 @@
         <select id="advantage">
             <option value="normal">正常</option>
             <option value="advantage">优势</option>
+            <option value="elven-accuracy">精灵之准（优势）</option>
             <option value="disadvantage">劣势</option>
         </select>
     </div>
@@ -254,6 +255,8 @@
                         hitChance = Math.min(0.95, Math.max(0.05, (21 - (ac - effectiveBonus)) / 20));
                     } else if (advantage === 'advantage') {
                         hitChance = Math.min(0.95, Math.max(0.05, 1 - Math.pow((ac - effectiveBonus - 1) / 20, 2)));
+                    } else if (advantage === 'elven-accuracy') {
+                        hitChance = Math.min(0.95, Math.max(0.05, 1 - Math.pow((ac - effectiveBonus - 1) / 20, 3)));
                     } else {
                         hitChance = Math.min(0.95, Math.max(0.05, Math.pow((21 - (ac - effectiveBonus)) / 20, 2)));
                     }
