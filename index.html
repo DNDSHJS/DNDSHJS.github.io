@@ -143,7 +143,7 @@
             return { fixedBonus, diceBonus };
         }
 
-        function simulateDamage(damageObj, times = 100000, extraDamage = 0) {
+        function simulateDamage(damageObj, times = 500000, extraDamage = 0) {
             let totalDamage = 0;
             let damageDistribution = {};
             for (let i = 0; i < times; i++) {
