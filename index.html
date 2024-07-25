@@ -86,8 +86,8 @@
         </select>
     </div>
     <div class="input-group">
-        <label for="damage">伤害掷骰 (例如: 2d8+10)：</label>
-        <input type="text" id="damage" value="2d8+10">
+        <label for="damage">伤害掷骰 (例如: 2d8+d4+2d6+10)：</label>
+        <input type="text" id="damage" value="2d8+d4+2d6+10">
     </div>
     <div class="input-group">
         <label for="attackBonus">攻击加值 (例如: 5 或 5+d4)：</label>
@@ -111,16 +111,26 @@
         }
 
         function parseDamage(damageString) {
-            const regex = /(\d+)d(\d+)(?:\s*\+\s*(\d+))?/;
-            const match = damageString.match(regex);
-            if (!match) return null;
+            const regex = /(\d*)d(\d+)/g;
+            const parts = damageString.split('+');
+            let diceRolls = [];
+            let bonus = 0;
 
-            const [, numberOfDice, diceSides, bonus] = match;
-            return {
-                numberOfDice: parseInt(numberOfDice),
-                diceSides: parseInt(diceSides),
-                bonus: bonus ? parseInt(bonus) : 0
-            };
+            parts.forEach(part => {
+                part = part.trim();
+                const match = part.match(regex);
+                if (match) {
+                    const [, number, sides] = regex.exec(part);
+                    diceRolls.push({
+                        number: number ? parseInt(number) : 1,
+                        sides: parseInt(sides)
+                    });
+                } else if (!isNaN(part)) {
+                    bonus += parseInt(part);
+                }
+            });
+
+            return { diceRolls, bonus };
         }
 
         function parseAttackBonus(bonusString) {
@@ -149,9 +159,11 @@
             let damageDistribution = {};
             for (let i = 0; i < times; i++) {
                 let damage = 0;
-                for (let j = 0; j < damageObj.numberOfDice; j++) {
-                    damage += rollDice(damageObj.diceSides);
-                }
+                damageObj.diceRolls.forEach(roll => {
+                    for (let j = 0; j < roll.number; j++) {
+                        damage += rollDice(roll.sides);
+                    }
+                });
                 damage += damageObj.bonus + extraDamage;
                 totalDamage += damage;
                 damageDistribution[damage] = (damageDistribution[damage] || 0) + 1;
@@ -227,8 +239,8 @@
                 const gwm = document.getElementById('gwm').checked;
 
                 const damageObj = parseDamage(damageString);
-                if (!damageObj) {
-                    document.getElementById('result').innerHTML = '无效的伤害掷骰格式。请使用类似 "2d8+10" 的格式。';
+                if (damageObj.diceRolls.length === 0) {
+                    document.getElementById('result').innerHTML = '无效的伤害掷骰格式。请使用类似 "2d8+d4+2d6+10" 的格式。';
                     document.getElementById('loading').style.display = 'none';
                     return;
                 }
